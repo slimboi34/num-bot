@@ -1,17 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import './App.css';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'; // ✅ Import recharts
 
 function App() {
   const canvasRef = useRef(null);
   const [model, setModel] = useState(null);
   const [prediction, setPrediction] = useState(null);
+  const [probabilities, setProbabilities] = useState([]); // ✅ Store digit probabilities
 
-  // Load model on mount
   useEffect(() => {
     async function loadModel() {
       try {
-        // Load the model from public/tfjs_model/model.json
         const loadedModel = await tf.loadGraphModel(process.env.PUBLIC_URL + '/tfjs_model/model.json');
         console.log("Model loaded successfully!");
         setModel(loadedModel);
@@ -22,7 +22,6 @@ function App() {
     loadModel();
   }, []);
 
-  // Clear the canvas
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -31,9 +30,9 @@ function App() {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     setPrediction(null);
+    setProbabilities([]); // ✅ Clear probabilities on reset
   };
 
-  // Drawing handlers
   let isDrawing = false;
   const startDrawing = (e) => {
     isDrawing = true;
@@ -52,7 +51,6 @@ function App() {
     if (!isDrawing) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    // Calculate mouse position relative to the canvas
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -67,7 +65,6 @@ function App() {
     ctx.moveTo(x, y);
   };
 
-  // Preprocess the canvas image and predict digit
   const predictDigit = async () => {
     if (!model) {
       alert("Model not loaded yet!");
@@ -76,37 +73,39 @@ function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
-    // Create an offscreen canvas to resize the drawing to 28x28
     const offscreen = document.createElement('canvas');
     offscreen.width = 28;
     offscreen.height = 28;
     const offCtx = offscreen.getContext('2d');
-
-    // Draw the main canvas content onto the offscreen canvas.
     offCtx.drawImage(canvas, 0, 0, 28, 28);
     let imageData = offCtx.getImageData(0, 0, 28, 28);
     
-    // Convert to grayscale and normalize.
-    // Assuming the drawing uses black on a white background:
     const data = imageData.data;
     const grayData = [];
     for (let i = 0; i < data.length; i += 4) {
-      // Use red channel (all channels are equal in grayscale), then invert
-      const inverted = 255 - data[i]; // invert so the drawn digit becomes white (high value)
+      const inverted = 255 - data[i];
       grayData.push(inverted / 255);
     }
     
-    // Create a tensor of shape [1, 28, 28, 1]
     const input = tf.tensor(grayData, [1, 28, 28, 1]);
-    // Run prediction
     const predictionTensor = model.predict(input);
+
+    const predictionArray = await predictionTensor.data();
     const predictedDigit = predictionTensor.argMax(-1).dataSync()[0];
+
     setPrediction(predictedDigit);
+
+    // ✅ Format data for recharts
+    const formattedData = predictionArray.map((prob, index) => ({
+      digit: index,
+      probability: parseFloat((prob * 100).toFixed(2))  // Convert to % and round
+    }));
+    setProbabilities(formattedData);
   };
 
   return (
     <div className="App">
-      <h1>Digit Recognizer</h1>
+      <h1>Digit Recogniser</h1>
       <canvas
         ref={canvasRef}
         width={280}
@@ -122,6 +121,22 @@ function App() {
         <button onClick={predictDigit} style={{ marginLeft: '10px' }}>Predict</button>
       </div>
       {prediction !== null && <h2>Prediction: {prediction}</h2>}
+
+      {/* ✅ Bar chart for probabilities */}
+      {probabilities.length > 0 && (
+        <div style={{ width: '100%', maxWidth: '600px', height: 300, margin: 'auto' }}>
+          <h3>Prediction Probabilities</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={probabilities}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="digit" />
+              <YAxis unit="%" />
+              <Tooltip />
+              <Bar dataKey="probability" fill="#8884d8" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
