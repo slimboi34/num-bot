@@ -54,12 +54,10 @@ export default function App() {
   const [model, setModel] = useState(null);
   const [prediction, setPrediction] = useState(null);
   const [grayBuffer, setGrayBuffer] = useState(null);
-  const [hasDrawn, setHasDrawn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [correction, setCorrection] = useState('');
   const [showToast, setShowToast] = useState(false);
 
-  // 1) load TFJS model
   useEffect(() => {
     tf.loadGraphModel(process.env.PUBLIC_URL + '/tfjs_model/model.json')
       .then(m => setModel(m))
@@ -70,7 +68,6 @@ export default function App() {
       });
   }, []);
 
-  // 2) clear canvas
   const clearCanvas = () => {
     const c = canvasRef.current;
     if (!c) return;
@@ -78,12 +75,10 @@ export default function App() {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, c.width, c.height);
     setPrediction(null);
-    setHasDrawn(false);
     setGrayBuffer(null);
     setCorrection('');
   };
 
-  // 3) coordinate helper
   const getXY = e => {
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
@@ -91,92 +86,102 @@ export default function App() {
     return { x, y };
   };
 
-  // 4) drawing handlers
   const startDrawing = e => {
     if (!model) return;
-    e.preventDefault(); isDrawing.current = true; setHasDrawn(true);
+    e.preventDefault();
+    isDrawing.current = true;
     const { x, y } = getXY(e);
     const ctx = canvasRef.current.getContext('2d');
-    ctx.beginPath(); ctx.moveTo(x, y);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
   };
+
   const draw = e => {
     if (!isDrawing.current) return;
     e.preventDefault();
     const { x, y } = getXY(e);
     const ctx = canvasRef.current.getContext('2d');
-    ctx.lineWidth = 16; ctx.lineCap = 'round'; ctx.strokeStyle = '#222';
-    ctx.lineTo(x, y); ctx.stroke();
+    ctx.lineWidth = 16;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#222';
+    ctx.lineTo(x, y);
+    ctx.stroke();
   };
+
   const endDrawing = () => {
     if (!isDrawing.current) return;
     isDrawing.current = false;
     canvasRef.current.getContext('2d').beginPath();
   };
 
-  // 5) preprocess & predict
   const preprocessAndPredict = async () => {
     const src = canvasRef.current;
     const wr = src.width, hr = src.height;
     const ctx = src.getContext('2d');
     const img = ctx.getImageData(0, 0, wr, hr).data;
-    // bounding box
-    let xMin=wr, xMax=0, yMin=hr, yMax=0;
-    for(let y=0;y<hr;y++){
-      for(let x=0;x<wr;x++){
-        if(img[(y*wr+x)*4]<250){
-          xMin=Math.min(xMin,x);
-          xMax=Math.max(xMax,x);
-          yMin=Math.min(yMin,y);
-          yMax=Math.max(yMax,y);
+
+    let xMin = wr, xMax = 0, yMin = hr, yMax = 0;
+    for (let y = 0; y < hr; y++) {
+      for (let x = 0; x < wr; x++) {
+        if (img[(y * wr + x) * 4] < 250) {
+          xMin = Math.min(xMin, x);
+          xMax = Math.max(xMax, x);
+          yMin = Math.min(yMin, y);
+          yMax = Math.max(yMax, y);
         }
       }
     }
-    if(xMax<xMin||yMax<yMin){ alert('Draw first!'); return; }
+    if (xMax < xMin || yMax < yMin) {
+      alert('Draw first!');
+      return;
+    }
 
-    const boxW=xMax-xMin+1, boxH=yMax-yMin+1;
-    const dim=Math.max(boxW,boxH);
-    const off=document.createElement('canvas');
-    off.width=off.height=28;
-    const octx=off.getContext('2d');
-    octx.fillStyle='#fff'; octx.fillRect(0,0,28,28);
-    const pad=2, scale=(28-2*pad)/dim;
-    const dx=pad+((dim-boxW)*scale)/2, dy=pad+((dim-boxH)*scale)/2;
-    octx.filter='blur(1px) contrast(200%)';
-    octx.drawImage(src,xMin,yMin,boxW,boxH,dx,dy,boxW*scale,boxH*scale);
-    octx.filter='none';
+    const boxW = xMax - xMin + 1, boxH = yMax - yMin + 1;
+    const dim = Math.max(boxW, boxH);
+    const off = document.createElement('canvas');
+    off.width = off.height = 28;
+    const octx = off.getContext('2d');
+    octx.fillStyle = '#fff';
+    octx.fillRect(0, 0, 28, 28);
+    const pad = 2, scale = (28 - 2 * pad) / dim;
+    const dx = pad + ((dim - boxW) * scale) / 2;
+    const dy = pad + ((dim - boxH) * scale) / 2;
+    octx.filter = 'blur(1px) contrast(200%)';
+    octx.drawImage(src, xMin, yMin, boxW, boxH, dx, dy, boxW * scale, boxH * scale);
+    octx.filter = 'none';
 
-    const data=octx.getImageData(0,0,28,28).data;
-    const gray=new Float32Array(784);
-    for(let i=0;i<784;i++){
-      const v=255-data[i*4];
-      gray[i]=v>50?1:0;
+    const data = octx.getImageData(0, 0, 28, 28).data;
+    const gray = new Float32Array(784);
+    for (let i = 0; i < 784; i++) {
+      const v = 255 - data[i * 4];
+      gray[i] = v > 50 ? 1 : 0;
     }
     setGrayBuffer(Array.from(gray));
 
-    const input=tf.tensor(gray,[1,28,28,1]);
-    const p=model.predict(input).argMax(-1).dataSync()[0];
+    const input = tf.tensor(gray, [1, 28, 28, 1]);
+    const p = model.predict(input).argMax(-1).dataSync()[0];
     setPrediction(p);
   };
 
-  // 6) submit correction
   const submitCorrection = async () => {
-    const lbl=Number(correction);
-    if(!grayBuffer||isNaN(lbl))return;
-    await fetch('http://localhost:3001/api/save-data',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({grayData:grayBuffer,label:lbl})
+    const lbl = Number(correction);
+    if (!grayBuffer || isNaN(lbl)) return;
+    await fetch('http://localhost:3001/api/save-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grayData: grayBuffer, label: lbl })
     });
     setShowToast(true);
-    setTimeout(()=>setShowToast(false),3000);
+    setTimeout(() => setShowToast(false), 3000);
     setCorrection('');
   };
 
-  if(loading){
+  if (loading) {
     return (
       <div className="loader-container">
         <style>{globalStyles}</style>
-        <div className="loader"/><p>Loading…</p>
+        <div className="loader" />
+        <p>Loading…</p>
       </div>
     );
   }
@@ -202,7 +207,7 @@ export default function App() {
           <button onClick={clearCanvas} className="btn btn-clear">Clear</button>
           <button onClick={preprocessAndPredict} disabled={!model} className="btn btn-predict">Predict</button>
         </div>
-        {prediction!==null && (
+        {prediction !== null && (
           <>
             <div className="result">
               Prediction: <span className="digit">{prediction}</span>
@@ -213,7 +218,7 @@ export default function App() {
                 min="0" max="9"
                 placeholder="?"
                 value={correction}
-                onChange={e=>setCorrection(e.target.value)}
+                onChange={e => setCorrection(e.target.value)}
               />
               <button
                 className="btn btn-submit"
