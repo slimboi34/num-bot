@@ -163,18 +163,6 @@ export default function App() {
     setPrediction(p);
   };
 
-  const submitCorrection = async () => {
-    const lbl = Number(correction);
-    if (!grayBuffer || isNaN(lbl)) return;
-    await fetch('http://localhost:3001/api/save-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ grayData: grayBuffer, label: lbl })
-    });
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
-    setCorrection('');
-  };
 
   if (loading) {
     return (
@@ -213,9 +201,6 @@ export default function App() {
               Prediction: <span className="digit">{prediction}</span>
             </div>
           </>
-        )}
-        {showToast && (
-          <div className="toast">✅ Correction saved!</div>
         )}
       </div>
     </div>
