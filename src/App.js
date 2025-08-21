@@ -53,10 +53,8 @@ export default function App() {
   const isDrawing = useRef(false);
   const [model, setModel] = useState(null);
   const [prediction, setPrediction] = useState(null);
-  const [grayBuffer, setGrayBuffer] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [correction, setCorrection] = useState('');
-  const [showToast, setShowToast] = useState(false);
+
 
   useEffect(() => {
     tf.loadGraphModel(process.env.PUBLIC_URL + '/tfjs_model/model.json')
