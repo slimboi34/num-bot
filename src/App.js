@@ -212,22 +212,6 @@ export default function App() {
             <div className="result">
               Prediction: <span className="digit">{prediction}</span>
             </div>
-            <div className="correction">
-              <input
-                type="number"
-                min="0" max="9"
-                placeholder="?"
-                value={correction}
-                onChange={e => setCorrection(e.target.value)}
-              />
-              <button
-                className="btn btn-submit"
-                disabled={!correction.match(/^[0-9]$/)}
-                onClick={submitCorrection}
-              >
-                Submit
-              </button>
-            </div>
           </>
         )}
         {showToast && (
